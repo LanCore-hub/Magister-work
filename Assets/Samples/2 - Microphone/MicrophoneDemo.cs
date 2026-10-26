@@ -1,18 +1,19 @@
+using System;
 using System.Collections;
 using System.Diagnostics;
+using System.Net.Http;
+using System.Threading.Tasks;
 using TMPro;
 using UnityEngine;
-using UnityEngine.Networking;
 using UnityEngine.UI;
+using Valve.VR;
 using Whisper.Utils;
 using Button = UnityEngine.UI.Button;
 using Toggle = UnityEngine.UI.Toggle;
+using Debug = UnityEngine.Debug;
 
 namespace Whisper.Samples
 {
-    /// <summary>
-    /// Record audio clip from microphone and make a transcription.
-    /// </summary>
     public class MicrophoneDemo : MonoBehaviour
     {
         public WhisperManager whisper;
@@ -20,7 +21,7 @@ namespace Whisper.Samples
         public bool streamSegments = true;
         public bool printLanguage = true;
 
-        [Header("UI")] 
+        [Header("UI")]
         public Button button;
         public Text buttonText;
         public Text outputText;
@@ -35,23 +36,46 @@ namespace Whisper.Samples
         [SerializeField] private GameObject Stop_sign;
 
         [Header("3D Text")]
-        public TMP_Text text3D; // Ссылка на 3D текст
-        public float text3DDuration = 5f; // Время отображения 3D текста в секундах
-        public bool autoHideText3D = true; // Автоматически скрывать 3D текст
+        public TMP_Text text3D;
+        public float text3DDuration = 5f;
+        public bool autoHideText3D = true;
         private float _text3DTimer;
 
         [Header("ESP8266")]
-        public string esp8266IpAddress = "10.149.186.175"; // IP вашего ESP8266
+        [SerializeField] private MyInfo MyInfoScript;
+        private string esp8266IpAddress;
 
+        [Header("Keyboard Control")]
+        [Tooltip("Включить управление с клавиатуры (стрелки + пробел)")]
+        public bool useKeyboardControl = true;
+
+        [Header("SteamVR Stop Action")]
+        [Tooltip("Действие StopGrab из SteamVR Input (Boolean). Обычно /actions/default/in/StopGrab")]
+        public SteamVR_Action_Boolean stopGrabAction;
+        [Tooltip("Источник ввода: LeftHand, RightHand или Any")]
+        public SteamVR_Input_Sources inputSource = SteamVR_Input_Sources.Any;
+        [Tooltip("Отправлять /stop только один раз за нажатие")]
+        public bool stopOncePerPress = true;
+        [Tooltip("Печатать отладку SteamVR-событий")]
+        public bool debugSteamVR = true;
+
+        private bool _gripPressed = false;
         private string _buffer;
+
+        private static readonly HttpClient _httpClient = new HttpClient
+        {
+            Timeout = TimeSpan.FromSeconds(3)
+        };
 
         private void Awake()
         {
+            esp8266IpAddress = MyInfoScript.esp8266IpAddress;
+
             whisper.OnNewSegment += OnNewSegment;
             whisper.OnProgress += OnProgressHandler;
-            
+
             microphoneRecord.OnRecordStop += OnRecordStop;
-            
+
             button.onClick.AddListener(OnButtonPressed);
             languageDropdown.value = languageDropdown.options
                 .FindIndex(op => op.text == whisper.language);
@@ -67,6 +91,50 @@ namespace Whisper.Samples
             {
                 text3D.gameObject.SetActive(false);
             }
+
+            // ===== SteamVR StopGrab =====
+            if (stopGrabAction != null)
+            {
+                stopGrabAction.AddOnStateDownListener(OnStopGrabDown, inputSource);
+                stopGrabAction.AddOnStateUpListener(OnStopGrabUp, inputSource);
+                if (debugSteamVR)
+                    Debug.Log($"[SteamVR] Подписались на '{stopGrabAction.fullPath}' (source={inputSource})");
+            }
+            else
+            {
+                // Пробуем автоматически найти StopGrab в сгенерированных SteamVR_Actions
+                var autoAction = SteamVR_Actions.default_StopGrab;
+                if (autoAction != null)
+                {
+                    stopGrabAction = autoAction;
+                    stopGrabAction.AddOnStateDownListener(OnStopGrabDown, inputSource);
+                    stopGrabAction.AddOnStateUpListener(OnStopGrabUp, inputSource);
+                    if (debugSteamVR)
+                        Debug.Log($"[SteamVR] stopGrabAction не назначен, взяли default_StopGrab автоматически. Path='{stopGrabAction.fullPath}'");
+                }
+                else
+                {
+                    Debug.LogError("[SteamVR] Не удалось найти StopGrab! Назначьте его в инспекторе или сгенерируйте SteamVR Input Actions.");
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(esp8266IpAddress))
+            {
+                Debug.LogError("[ESP] esp8266IpAddress пустой! Укажите IP в инспекторе.");
+            }
+            else
+            {
+                Debug.Log($"[ESP] IP in inspector: '{esp8266IpAddress}' len={esp8266IpAddress.Length}");
+            }
+        }
+
+        private void OnDestroy()
+        {
+            if (stopGrabAction != null)
+            {
+                stopGrabAction.RemoveOnStateDownListener(OnStopGrabDown, inputSource);
+                stopGrabAction.RemoveOnStateUpListener(OnStopGrabUp, inputSource);
+            }
         }
 
         private void Start()
@@ -80,7 +148,6 @@ namespace Whisper.Samples
 
         private void Update()
         {
-            // Автоматическое скрытие 3D текста через заданное время
             if (autoHideText3D && text3D != null && text3D.gameObject.activeSelf)
             {
                 _text3DTimer -= Time.deltaTime;
@@ -89,7 +156,112 @@ namespace Whisper.Samples
                     text3D.gameObject.SetActive(false);
                 }
             }
+
+            if (useKeyboardControl)
+            {
+                HandleKeyboardInput();
+            }
+
+            // ===== Резервный опрос StopGrab =====
+            if (stopGrabAction != null)
+            {
+                bool down = stopGrabAction.GetStateDown(inputSource);
+                bool up = stopGrabAction.GetStateUp(inputSource);
+                if (down) HandleStopGrabDown("poll");
+                if (up) HandleStopGrabUp("poll");
+            }
         }
+
+        private void HandleKeyboardInput()
+        {
+            if (Input.GetKeyDown(KeyCode.UpArrow))
+            {
+                if (Stop_sign != null) Stop_sign.SetActive(false);
+                if (Arrow_sign != null)
+                {
+                    Arrow_sign.transform.localEulerAngles = new Vector3(0, 90, 270);
+                    Arrow_sign.SetActive(true);
+                }
+                UpdateText3D("ВПЕРЁД");
+                SendCommandToESP8266("/forward");
+            }
+            else if (Input.GetKeyDown(KeyCode.DownArrow))
+            {
+                if (Stop_sign != null) Stop_sign.SetActive(false);
+                if (Arrow_sign != null)
+                {
+                    Arrow_sign.transform.localEulerAngles = new Vector3(0, 90, 90);
+                    Arrow_sign.SetActive(true);
+                }
+                UpdateText3D("НАЗАД");
+                SendCommandToESP8266("/backward");
+            }
+            else if (Input.GetKeyDown(KeyCode.LeftArrow))
+            {
+                if (Stop_sign != null) Stop_sign.SetActive(false);
+                if (Arrow_sign != null)
+                {
+                    Arrow_sign.transform.localEulerAngles = new Vector3(90, 0, 0);
+                    Arrow_sign.SetActive(true);
+                }
+                UpdateText3D("ВЛЕВО");
+                SendCommandToESP8266("/left");
+            }
+            else if (Input.GetKeyDown(KeyCode.RightArrow))
+            {
+                if (Stop_sign != null) Stop_sign.SetActive(false);
+                if (Arrow_sign != null)
+                {
+                    Arrow_sign.transform.localEulerAngles = new Vector3(90, 0, 180);
+                    Arrow_sign.SetActive(true);
+                }
+                UpdateText3D("ВПРАВО");
+                SendCommandToESP8266("/right");
+            }
+            else if (Input.GetKeyDown(KeyCode.Space))
+            {
+                if (Arrow_sign != null) Arrow_sign.SetActive(false);
+                if (Stop_sign != null) Stop_sign.SetActive(true);
+                UpdateText3D("СТОП");
+                SendCommandToESP8266("/stop");
+            }
+        }
+
+        private void OnStopGrabDown(SteamVR_Action_Boolean fromAction, SteamVR_Input_Sources fromSource)
+        {
+            HandleStopGrabDown($"event({fromSource})");
+        }
+
+        private void OnStopGrabUp(SteamVR_Action_Boolean fromAction, SteamVR_Input_Sources fromSource)
+        {
+            HandleStopGrabUp($"event({fromSource})");
+        }
+
+        private void HandleStopGrabDown(string source)
+        {
+            if (stopOncePerPress && _gripPressed) return;
+            _gripPressed = true;
+
+            if (debugSteamVR)
+                Debug.Log($"[SteamVR] STOPGRAB DOWN ({source}) -> отправляем /stop");
+
+            if (Arrow_sign != null) Arrow_sign.SetActive(false);
+            if (Stop_sign != null) Stop_sign.SetActive(true);
+
+            UpdateText3D("STOP");
+            SendCommandToESP8266("/stop");
+        }
+
+        private void HandleStopGrabUp(string source)
+        {
+            if (!_gripPressed) return;
+            _gripPressed = false;
+
+            if (debugSteamVR)
+                Debug.Log($"[SteamVR] STOPGRAB UP ({source})");
+        }
+
+        // ===== UI =====
 
         private void OnVadChanged(bool vadStop)
         {
@@ -109,7 +281,7 @@ namespace Whisper.Samples
                 buttonText.text = "Record";
             }
         }
-        
+
         private async void OnRecordStop(AudioChunk recordedAudio)
         {
             buttonText.text = "Record";
@@ -117,9 +289,9 @@ namespace Whisper.Samples
 
             var sw = new Stopwatch();
             sw.Start();
-            
+
             var res = await whisper.GetTextAsync(recordedAudio.Data, recordedAudio.Frequency, recordedAudio.Channels);
-            if (res == null || !outputText) 
+            if (res == null || !outputText)
                 return;
 
             var time = sw.ElapsedMilliseconds;
@@ -129,7 +301,7 @@ namespace Whisper.Samples
             var text = res.Result;
             if (printLanguage)
                 text += $"\n\nLanguage: {res.Language}";
-            
+
             outputText.text = text;
             UiUtils.ScrollDown(scroll);
 
@@ -142,13 +314,13 @@ namespace Whisper.Samples
                 buttonText.text = "Processing...";
             }
         }
-        
+
         private void OnLanguageChanged(int ind)
         {
             var opt = languageDropdown.options[ind];
             whisper.language = opt.text;
         }
-        
+
         private void OnTranslateChanged(bool translate)
         {
             whisper.translateToEnglish = translate;
@@ -160,7 +332,7 @@ namespace Whisper.Samples
                 return;
             timeText.text = $"Progress: {progress}%";
         }
-        
+
         private void OnNewSegment(WhisperSegment segment)
         {
             if (!streamSegments || !outputText)
@@ -174,24 +346,17 @@ namespace Whisper.Samples
         private void UpdateText3D(string text)
         {
             if (text3D == null)
-            {
                 return;
-            }
 
-            // Ограничиваем длину текста, если нужно
             string displayText = text;
-            if (displayText.Length > 50) // Обрезаем до 50 символов для читаемости
+            if (displayText.Length > 50)
             {
                 displayText = displayText.Substring(0, 50) + "...";
             }
 
-            // Устанавливаем текст
             text3D.text = displayText;
+            text3D.gameObject.SetActive(true);
 
-            // Показываем объект
-            text3D.gameObject.SetActive(true); // Отображение текста после голоса text3D.gameObject.SetActive(true)
-
-            // Сбрасываем таймер для автоматического скрытия
             if (autoHideText3D)
             {
                 _text3DTimer = text3DDuration;
@@ -202,56 +367,68 @@ namespace Whisper.Samples
         {
             command = command.ToLower().Trim();
 
-            if (command.Contains("вперед") || command.Contains("вперёд.") || command.Contains("вперед!") ||
-                command.Contains("вверх") || command.Contains("вверх.") || command.Contains("вверх!") ||
-                command.Contains("верх") || command.Contains("верх.") || command.Contains("верх!") ||
-                command.Contains("прямо") || command.Contains("прямо.") || command.Contains("прямо!"))
+            if (command.Contains("вперед") || command.Contains("вперёд.") ||
+                command.Contains("вверх") || command.Contains("вверх.") ||
+                command.Contains("верх") || command.Contains("верх.") ||
+                command.Contains("прямо") || command.Contains("прямо."))
             {
-                UnityEngine.Debug.Log("Executing: Move Forward");
-                Stop_sign.SetActive(false);
-                Arrow_sign.transform.localEulerAngles = new Vector3(0, 90, 270);
-                Arrow_sign.SetActive(true);
+                Debug.Log("Executing: Move Forward");
+                if (Stop_sign != null) Stop_sign.SetActive(false);
+                if (Arrow_sign != null)
+                {
+                    Arrow_sign.transform.localEulerAngles = new Vector3(0, 90, 270);
+                    Arrow_sign.SetActive(true);
+                }
                 SendCommandToESP8266("/forward");
             }
-            else if (command.Contains("назад") || command.Contains("назад.") || command.Contains("назад!") ||
-                     command.Contains("вниз") || command.Contains("вниз.") || command.Contains("вниз!"))
+            else if (command.Contains("назад") || command.Contains("назад.") ||
+                     command.Contains("вниз") || command.Contains("вниз."))
             {
-                UnityEngine.Debug.Log("Executing: Move Backward");
-                Stop_sign.SetActive(false);
-                Arrow_sign.transform.localEulerAngles = new Vector3(0, 90, 90);
-                Arrow_sign.SetActive(true);
+                Debug.Log("Executing: Move Backward");
+                if (Stop_sign != null) Stop_sign.SetActive(false);
+                if (Arrow_sign != null)
+                {
+                    Arrow_sign.transform.localEulerAngles = new Vector3(0, 90, 90);
+                    Arrow_sign.SetActive(true);
+                }
                 SendCommandToESP8266("/backward");
             }
-            else if (command.Contains("влево") || command.Contains("влево.") || command.Contains("влево!") || 
-                     command.Contains("лево") || command.Contains("лево.") || command.Contains("лево!"))
+            else if (command.Contains("влево") || command.Contains("влево.") ||
+                     command.Contains("лево") || command.Contains("лево."))
             {
-                UnityEngine.Debug.Log("Executing: Turn Left");
-                Stop_sign.SetActive(false);
-                Arrow_sign.transform.localEulerAngles = new Vector3(90, 0, 0);
-                Arrow_sign.SetActive(true);
+                Debug.Log("Executing: Turn Left");
+                if (Stop_sign != null) Stop_sign.SetActive(false);
+                if (Arrow_sign != null)
+                {
+                    Arrow_sign.transform.localEulerAngles = new Vector3(90, 0, 0);
+                    Arrow_sign.SetActive(true);
+                }
                 SendCommandToESP8266("/left");
             }
-            else if (command.Contains("вправо") || command.Contains("вправо.") || command.Contains("вправо!") || 
-                     command.Contains("право") || command.Contains("право.") || command.Contains("право!"))
+            else if (command.Contains("вправо") || command.Contains("вправо.") ||
+                     command.Contains("право") || command.Contains("право."))
             {
-                UnityEngine.Debug.Log("Executing: Turn Right");
-                Stop_sign.SetActive(false);
-                Arrow_sign.transform.localEulerAngles = new Vector3(90, 0, 180);
-                Arrow_sign.SetActive(true);
+                Debug.Log("Executing: Turn Right");
+                if (Stop_sign != null) Stop_sign.SetActive(false);
+                if (Arrow_sign != null)
+                {
+                    Arrow_sign.transform.localEulerAngles = new Vector3(90, 0, 180);
+                    Arrow_sign.SetActive(true);
+                }
                 SendCommandToESP8266("/right");
             }
-            else if (command.Contains("стоп") || command.Contains("стоп.") || command.Contains("стоп!") ||
-                     command.Contains("остановись") || command.Contains("остановись.") || command.Contains("остановись!") || 
-                     command.Contains("стой") || command.Contains("стой.") || command.Contains("стой!"))
+            else if (command.Contains("стоп") || command.Contains("стоп.") ||
+                     command.Contains("остановись") || command.Contains("остановись.") ||
+                     command.Contains("стой") || command.Contains("стой."))
             {
-                UnityEngine.Debug.Log("Executing: Stop");
-                Arrow_sign.SetActive(false);
-                Stop_sign.SetActive(true);
+                Debug.Log("Executing: Stop");
+                if (Arrow_sign != null) Arrow_sign.SetActive(false);
+                if (Stop_sign != null) Stop_sign.SetActive(true);
                 SendCommandToESP8266("/stop");
             }
             else if (command.Contains("разворот") || command.Contains("развернись") || command.Contains("кругом"))
             {
-                UnityEngine.Debug.Log("Executing: Turn Around");
+                Debug.Log("Executing: Turn Around");
                 StartCoroutine(TurnAround());
             }
         }
@@ -265,40 +442,62 @@ namespace Whisper.Samples
             SendCommandToESP8266("/stop");
         }
 
+        // ===== ESP8266 =====
+
         public void SendCommandToESP8266(string command)
         {
-            StartCoroutine(SendCommandCoroutine(command));
+            _ = SendCommandAsync(command);
         }
 
-        private IEnumerator SendCommandCoroutine(string command)
+        private async Task SendCommandAsync(string command)
         {
-            string url = $"http://{esp8266IpAddress}{command}";
-            UnityEngine.Debug.Log($"Sending command to: {url}");
-
-            using (UnityWebRequest www = UnityWebRequest.Get(url))
+            if (string.IsNullOrWhiteSpace(esp8266IpAddress))
             {
-                www.timeout = 3;
-                yield return www.SendWebRequest();
+                Debug.LogError("[ESP] IP пустой, команда не отправлена: " + command);
+                return;
+            }
 
-                if (www.result == UnityWebRequest.Result.Success)
-                {
-                    UnityEngine.Debug.Log($"Command {command} sent successfully. Response: {www.downloadHandler.text}");
-                }
-                else
-                {
-                    UnityEngine.Debug.LogError($"Failed to send command: {www.error}");
-                    UnityEngine.Debug.LogError($"URL: {url}");
-                    UnityEngine.Debug.LogError($"Response Code: {www.responseCode}");
+            string url = $"http://{esp8266IpAddress}{command}";
+            Debug.Log($"[ESP] sending {url}");
 
-                    yield return new WaitForSeconds(0.5f);
-                    StartCoroutine(SendCommandCoroutine(command));
+            try
+            {
+                using (var resp = await _httpClient.GetAsync(url))
+                {
+                    string body = await resp.Content.ReadAsStringAsync();
+                    Debug.Log($"[ESP] OK {(int)resp.StatusCode} body='{body}' url={url}");
                 }
+            }
+            catch (TaskCanceledException)
+            {
+                Debug.LogError($"[ESP] TIMEOUT for {url}");
+            }
+            catch (HttpRequestException e)
+            {
+                Debug.LogError($"[ESP] HTTP error for {url}: {e.Message}");
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[ESP] FAIL for {url}: {e.GetType().Name}: {e.Message}");
             }
         }
 
         private void OnApplicationQuit()
         {
-            SendCommandToESP8266("/stop");
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(esp8266IpAddress))
+                {
+                    string url = $"http://{esp8266IpAddress}/stop";
+                    Debug.Log($"[ESP] OnApplicationQuit sending {url}");
+                    var task = _httpClient.GetAsync(url);
+                    task.Wait(1000);
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[ESP] quit send failed: {e.Message}");
+            }
         }
     }
 }

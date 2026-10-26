@@ -46,8 +46,9 @@ public class HeadRotation : MonoBehaviour
     public int valHeadY;   // вертикаль (вверх-вниз) - будет обновляться из VR
 
     [Header("Настройки UDP")]
-    public string espIP = "10.64.109.175"; // IP-адрес вашего ESP8266
-    public int port = 8888;
+    [SerializeField] private MyInfo MyInfoScript;
+    private string espIP; // IP-адрес вашего ESP8266
+    private int port = 8888;
 
     private UdpClient udpClient;
     private int lastSentX = -1;
@@ -60,6 +61,7 @@ public class HeadRotation : MonoBehaviour
 
     void Start()
     {
+        espIP = MyInfoScript.esp8266IpAddress;
         // Проверка IP-адреса
         if (string.IsNullOrEmpty(espIP))
         {

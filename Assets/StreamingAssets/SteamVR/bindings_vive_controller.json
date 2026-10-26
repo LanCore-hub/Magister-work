@@ -1,6 +1,11 @@
 {
+   "action_manifest_version" : 0,
+   "alias_info" : {},
+   "app_key" : "application.generated.unity.recognizer_mastery.exe",
    "bindings" : {
       "/actions/buggy" : {
+         "poses" : [],
+         "skeleton" : [],
          "sources" : [
             {
                "inputs" : {
@@ -9,6 +14,7 @@
                   }
                },
                "mode" : "trigger",
+               "parameters" : {},
                "path" : "/user/hand/left/input/trigger"
             },
             {
@@ -18,6 +24,7 @@
                   }
                },
                "mode" : "trigger",
+               "parameters" : {},
                "path" : "/user/hand/right/input/trigger"
             },
             {
@@ -30,6 +37,7 @@
                   }
                },
                "mode" : "trackpad",
+               "parameters" : {},
                "path" : "/user/hand/left/input/trackpad"
             },
             {
@@ -42,6 +50,7 @@
                   }
                },
                "mode" : "trackpad",
+               "parameters" : {},
                "path" : "/user/hand/right/input/trackpad"
             },
             {
@@ -51,6 +60,7 @@
                   }
                },
                "mode" : "button",
+               "parameters" : {},
                "path" : "/user/hand/left/input/application_menu"
             },
             {
@@ -60,6 +70,7 @@
                   }
                },
                "mode" : "button",
+               "parameters" : {},
                "path" : "/user/hand/right/input/application_menu"
             }
          ]
@@ -96,153 +107,179 @@
                "path" : "/user/hand/right/input/skeleton/right"
             }
          ],
-        "sources": [
-          {
-            "inputs": {
-              "click": {
-                "output": "/actions/default/in/interactui"
-              }
+         "sources" : [
+            {
+               "inputs" : {
+                  "click" : {
+                     "output" : "/actions/default/in/interactui"
+                  }
+               },
+               "mode" : "button",
+               "parameters" : {},
+               "path" : "/user/hand/left/input/trigger"
             },
-            "mode": "button",
-            "path": "/user/hand/left/input/trigger"
-          },
-          {
-            "inputs": {
-              "click": {
-                "output": "/actions/default/in/grabgrip"
-              }
+            {
+               "inputs" : {
+                  "click" : {
+                     "output" : "/actions/default/in/grabgrip"
+                  }
+               },
+               "mode" : "button",
+               "parameters" : {
+                  "click_activate_threshold" : "0.05",
+                  "click_deactivate_threshold" : "0",
+                  "force_input" : "force"
+               },
+               "path" : "/user/hand/left/input/grip"
             },
-            "mode": "button",
-            "parameters": {
-              "click_activate_threshold": "0.05",
-              "click_deactivate_threshold": "0",
-              "force_input": "force"
+            {
+               "inputs" : {
+                  "click" : {
+                     "output" : "/actions/default/in/grabpinch"
+                  }
+               },
+               "mode" : "button",
+               "parameters" : {
+                  "click_activate_threshold" : "0.75",
+                  "click_deactivate_threshold" : "0.7",
+                  "force_input" : "value"
+               },
+               "path" : "/user/hand/left/input/trigger"
             },
-            "path": "/user/hand/left/input/grip"
-          },
-          {
-            "inputs": {
-              "click": {
-                "output": "/actions/default/in/grabpinch"
-              }
+            {
+               "inputs" : {
+                  "click" : {
+                     "output" : "/actions/default/in/interactui"
+                  }
+               },
+               "mode" : "button",
+               "parameters" : {},
+               "path" : "/user/hand/right/input/trigger"
             },
-            "mode": "button",
-            "parameters": {
-              "click_activate_threshold": "0.75",
-              "click_deactivate_threshold": "0.7",
-              "force_input": "value"
+            {
+               "inputs" : {
+                  "click" : {
+                     "output" : "/actions/default/in/grabpinch"
+                  }
+               },
+               "mode" : "button",
+               "parameters" : {
+                  "click_activate_threshold" : "0.75",
+                  "click_deactivate_threshold" : "0.7"
+               },
+               "path" : "/user/hand/right/input/trigger"
             },
-            "path": "/user/hand/left/input/trigger"
-          },
-          {
-            "inputs": {
-              "click": {
-                "output": "/actions/default/in/interactui"
-              }
+            {
+               "inputs" : {
+                  "center" : {
+                     "output" : "/actions/default/in/teleport"
+                  },
+                  "east" : {
+                     "output" : "/actions/default/in/snapturnright"
+                  },
+                  "north" : {
+                     "output" : "/actions/default/in/teleport"
+                  },
+                  "south" : {
+                     "output" : "/actions/default/in/teleport"
+                  },
+                  "west" : {
+                     "output" : "/actions/default/in/snapturnleft"
+                  }
+               },
+               "mode" : "dpad",
+               "parameters" : {
+                  "deadzone_pct" : "90",
+                  "overlap_pct" : "15",
+                  "sub_mode" : "click"
+               },
+               "path" : "/user/hand/left/input/trackpad"
             },
-            "mode": "button",
-            "path": "/user/hand/right/input/trigger"
-          },
-          {
-            "inputs": {
-              "click": {
-                "output": "/actions/default/in/grabpinch"
-              }
+            {
+               "inputs" : {
+                  "center" : {
+                     "output" : "/actions/default/in/teleport"
+                  },
+                  "east" : {
+                     "output" : "/actions/default/in/snapturnright"
+                  },
+                  "north" : {
+                     "output" : "/actions/default/in/teleport"
+                  },
+                  "south" : {
+                     "output" : "/actions/default/in/teleport"
+                  },
+                  "west" : {
+                     "output" : "/actions/default/in/snapturnleft"
+                  }
+               },
+               "mode" : "dpad",
+               "parameters" : {
+                  "deadzone_pct" : "90",
+                  "overlap_pct" : "15",
+                  "sub_mode" : "click"
+               },
+               "path" : "/user/hand/right/input/trackpad"
             },
-            "mode": "button",
-            "parameters": {
-              "click_activate_threshold": "0.75",
-              "click_deactivate_threshold": "0.7"
+            {
+               "inputs" : {
+                  "click" : {
+                     "output" : "/actions/default/in/grabgrip"
+                  }
+               },
+               "mode" : "button",
+               "parameters" : {
+                  "click_activate_threshold" : "0.05",
+                  "click_deactivate_threshold" : "0",
+                  "force_input" : "force"
+               },
+               "path" : "/user/hand/right/input/grip"
             },
-            "path": "/user/hand/right/input/trigger"
-          },
-          {
-            "inputs": {
-              "center": {
-                "output": "/actions/default/in/teleport"
-              },
-              "east": {
-                "output": "/actions/default/in/snapturnright"
-              },
-              "north": {
-                "output": "/actions/default/in/teleport"
-              },
-              "south": {
-                "output": "/actions/default/in/teleport"
-              },
-              "west": {
-                "output": "/actions/default/in/snapturnleft"
-              }
+            {
+               "inputs" : {
+                  "pull" : {
+                     "output" : "/actions/default/in/squeeze"
+                  }
+               },
+               "mode" : "trigger",
+               "parameters" : {},
+               "path" : "/user/hand/left/input/trigger"
             },
-            "mode": "dpad",
-            "parameters": {
-              "deadzone_pct": "90",
-              "overlap_pct": "15",
-              "sub_mode": "click"
+            {
+               "inputs" : {
+                  "pull" : {
+                     "output" : "/actions/default/in/squeeze"
+                  }
+               },
+               "mode" : "trigger",
+               "parameters" : {},
+               "path" : "/user/hand/right/input/trigger"
             },
-            "path": "/user/hand/left/input/trackpad"
-          },
-          {
-            "inputs": {
-              "center": {
-                "output": "/actions/default/in/teleport"
-              },
-              "east": {
-                "output": "/actions/default/in/snapturnright"
-              },
-              "north": {
-                "output": "/actions/default/in/teleport"
-              },
-              "south": {
-                "output": "/actions/default/in/teleport"
-              },
-              "west": {
-                "output": "/actions/default/in/snapturnleft"
-              }
+            {
+               "inputs" : {
+                  "click" : {
+                     "output" : "/actions/default/in/stopgrab"
+                  }
+               },
+               "mode" : "toggle_button",
+               "parameters" : {},
+               "path" : "/user/hand/left/input/trigger"
             },
-            "mode": "dpad",
-            "parameters": {
-              "deadzone_pct": "90",
-              "overlap_pct": "15",
-              "sub_mode": "click"
-            },
-            "path": "/user/hand/right/input/trackpad"
-          },
-          {
-            "inputs": {
-              "click": {
-                "output": "/actions/default/in/grabgrip"
-              }
-            },
-            "mode": "button",
-            "parameters": {
-              "click_activate_threshold": "0.05",
-              "click_deactivate_threshold": "0",
-              "force_input": "force"
-            },
-            "path": "/user/hand/right/input/grip"
-          },
-          {
-            "inputs": {
-              "pull": {
-                "output": "/actions/default/in/squeeze"
-              }
-            },
-            "mode": "trigger",
-            "path": "/user/hand/left/input/trigger"
-          },
-          {
-            "inputs": {
-              "pull": {
-                "output": "/actions/default/in/squeeze"
-              }
-            },
-            "mode": "trigger",
-            "path": "/user/hand/right/input/trigger"
-          }
-        ]
+            {
+               "inputs" : {
+                  "click" : {
+                     "output" : "/actions/default/in/stopgrab"
+                  }
+               },
+               "mode" : "toggle_button",
+               "parameters" : {},
+               "path" : "/user/hand/right/input/trigger"
+            }
+         ]
       },
       "/actions/platformer" : {
+         "poses" : [],
+         "skeleton" : [],
          "sources" : [
             {
                "inputs" : {
@@ -251,6 +288,7 @@
                   }
                },
                "mode" : "button",
+               "parameters" : {},
                "path" : "/user/hand/left/input/trackpad"
             },
             {
@@ -260,6 +298,7 @@
                   }
                },
                "mode" : "button",
+               "parameters" : {},
                "path" : "/user/hand/right/input/trackpad"
             },
             {
@@ -269,6 +308,7 @@
                   }
                },
                "mode" : "trackpad",
+               "parameters" : {},
                "path" : "/user/hand/left/input/trackpad"
             },
             {
@@ -278,12 +318,17 @@
                   }
                },
                "mode" : "trackpad",
+               "parameters" : {},
                "path" : "/user/hand/right/input/trackpad"
             }
          ]
       }
    },
+   "category" : "steamvr_input",
    "controller_type" : "vive_controller",
    "description" : "",
-   "name" : "vive_controller"
+   "interaction_profile" : "",
+   "name" : "vive_controller",
+   "options" : {},
+   "simulated_actions" : []
 }

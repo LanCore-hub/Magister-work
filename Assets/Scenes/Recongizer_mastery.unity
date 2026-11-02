@@ -1112,7 +1112,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   logLevel: 1
-  modelPath: Whisper/ggml-small.bin
+  modelPath: Whisper/ggml-medium.bin
   isModelPathInStreamingAssets: 1
   initOnAwake: 1
   useGpu: 1
@@ -3568,14 +3568,14 @@ MonoBehaviour:
   echo: 1
   useVad: 1
   vadUpdateRateSec: 0.1
-  vadContextSec: 30
-  vadLastSec: 1.25
-  vadThd: 1
+  vadContextSec: 5
+  vadLastSec: 0.5
+  vadThd: 2
   vadFreqThd: 100
   vadIndicatorImage: {fileID: 0}
   vadStop: 1
   dropVadPart: 1
-  vadStopTime: 0.5
+  vadStopTime: 1
   microphoneDropdown: {fileID: 0}
   microphoneDefaultLabel: Default microphone
 --- !u!114 &1299490147

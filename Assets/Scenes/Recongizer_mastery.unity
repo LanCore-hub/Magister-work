@@ -3657,7 +3657,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   stream: {fileID: 41417661}
   takePhotoAction:
-    actionPath: /actions/default/in/GrabPinch
+    actionPath: /actions/default/in/PhotoGrabGrip
     needsReinit: 0
   hand: 0
   shutterSound: {fileID: 0}

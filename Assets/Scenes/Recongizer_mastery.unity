@@ -169,11 +169,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c743a3a56d26c754aa342de2185cae05, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  host: 10.103.137.139
+  host: 10.225.232.139
   port: 81
   path: /stream
+  connectTimeoutMs: 3000
+  readTimeoutMs: 5000
   targetFPS: 30
-  bufferSize: 65536
+  photoFolderName: "\u041A\u0430\u0440\u0442\u0438\u043D\u043A\u0438"
   currentTexture: {fileID: 0}
 --- !u!65 &41417662
 BoxCollider:
@@ -748,8 +750,10 @@ MonoBehaviour:
   host: 10.103.137.119
   port: 81
   path: /stream
+  connectTimeoutMs: 3000
+  readTimeoutMs: 5000
   targetFPS: 30
-  bufferSize: 65536
+  photoFolderName: "\u041A\u0430\u0440\u0442\u0438\u043D\u043A\u0438"
   currentTexture: {fileID: 0}
 --- !u!65 &226539970
 BoxCollider:
@@ -1957,8 +1961,10 @@ MonoBehaviour:
   host: 10.103.137.224
   port: 81
   path: /stream
+  connectTimeoutMs: 3000
+  readTimeoutMs: 5000
   targetFPS: 30
-  bufferSize: 65536
+  photoFolderName: "\u041A\u0430\u0440\u0442\u0438\u043D\u043A\u0438"
   currentTexture: {fileID: 0}
 --- !u!65 &801100349
 BoxCollider:
@@ -3535,6 +3541,7 @@ GameObject:
   - component: {fileID: 1299490147}
   - component: {fileID: 1299490146}
   - component: {fileID: 1299490149}
+  - component: {fileID: 1299490150}
   m_Layer: 0
   m_Name: Demo
   m_TagString: Untagged
@@ -3635,7 +3642,26 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ab49e31192455f34bacead64d35d49a2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  esp8266IpAddress: 10.105.97.175
+  esp8266IpAddress: 10.225.232.175
+--- !u!114 &1299490150
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1299490145}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ddfe51a220bd4df4495d0f0aa88136d5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  stream: {fileID: 41417661}
+  takePhotoAction:
+    actionPath: /actions/default/in/GrabPinch
+    needsReinit: 0
+  hand: 0
+  shutterSound: {fileID: 0}
+  cooldown: 0.5
 --- !u!1 &1345228951
 GameObject:
   m_ObjectHideFlags: 0
@@ -5361,8 +5387,10 @@ MonoBehaviour:
   host: 10.103.137.139
   port: 81
   path: /stream
+  connectTimeoutMs: 3000
+  readTimeoutMs: 5000
   targetFPS: 30
-  bufferSize: 65536
+  photoFolderName: "\u041A\u0430\u0440\u0442\u0438\u043D\u043A\u0438"
   currentTexture: {fileID: 0}
 --- !u!1 &1986862298
 GameObject:

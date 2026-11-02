@@ -1,4 +1,4 @@
-using System;
+/*using System;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
@@ -266,6 +266,266 @@ public class MJPEGStreamRenderer : MonoBehaviour
         }
         if (currentTexture != null)
             Destroy(currentTexture);
+    }
+
+    void OnApplicationQuit()
+    {
+        isRunning = false;
+    }
+}*/
+
+using System;
+using System.IO;
+using System.Net.Sockets;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using UnityEngine;
+
+public class MJPEGStreamRenderer : MonoBehaviour
+{
+    [Header("Network Settings")]
+    [SerializeField] private string host;
+    [SerializeField] private int port = 81;
+    [SerializeField] private string path = "/stream";
+    [SerializeField] private int connectTimeoutMs = 3000;
+    [SerializeField] private int readTimeoutMs = 5000;   // если камера молчит дольше — переподключение
+
+    [Header("Performance")]
+    [SerializeField] private int targetFPS = 30;         // Максимальная частота обновления текстуры (0 = без ограничения)
+
+    [Header("Photos")]
+    [SerializeField] private string photoFolderName = "Картинки"; // Папка на рабочем столе
+
+    private const int InitialBufferSize = 256 * 1024;
+    private const int MaxBufferSize = 4 * 1024 * 1024;  // защита от бесконечного роста при мусоре в потоке
+    private const int MinFreeSpace = 16 * 1024;
+
+    public Texture2D currentTexture;
+
+    private Renderer objectRenderer;
+    private Material material;
+    private Thread streamThread;
+    private volatile bool isRunning;
+    private volatile TcpClient activeClient;
+
+    private byte[] pendingJpeg;    // свежий кадр из сетевого потока (обмен через Interlocked)
+    private byte[] lastShownJpeg;  // последний показанный кадр — его и сохраняем как фото
+    private float nextDecodeTime;
+
+    void Start()
+    {
+        objectRenderer = GetComponent<Renderer>();
+        if (objectRenderer == null)
+        {
+            Debug.LogError("MJPEGStreamRenderer: Нет компонента Renderer на объекте!");
+            enabled = false;
+            return;
+        }
+
+        // RGB24 без мипмапов: JPEG всё равно без альфы, а генерация мипмапов на каждом кадре — лишняя работа
+        currentTexture = new Texture2D(2, 2, TextureFormat.RGB24, false)
+        {
+            wrapMode = TextureWrapMode.Clamp,
+            filterMode = FilterMode.Bilinear
+        };
+
+        // .material создаёт копию материала — берём её один раз и дальше только обновляем текстуру
+        material = objectRenderer.material;
+        material.mainTexture = currentTexture;
+
+        isRunning = true;
+        streamThread = new Thread(StreamWorker) { IsBackground = true, Name = "MJPEG Stream" };
+        streamThread.Start();
+    }
+
+    private void StreamWorker()
+    {
+        // Цикл переподключения при обрыве связи
+        while (isRunning)
+        {
+            try
+            {
+                using (TcpClient client = new TcpClient())
+                {
+                    activeClient = client;
+                    client.NoDelay = true;
+                    client.ReceiveBufferSize = InitialBufferSize;
+
+                    // Подключаемся с таймаутом (обычный Connect может висеть ~20 сек)
+                    Task connect = client.ConnectAsync(host, port);
+                    if (!connect.Wait(connectTimeoutMs) || !client.Connected)
+                        throw new TimeoutException($"нет ответа от {host}:{port}");
+
+                    using (NetworkStream networkStream = client.GetStream())
+                    {
+                        networkStream.ReadTimeout = readTimeoutMs;
+
+                        string request = $"GET {path} HTTP/1.1\r\nHost: {host}:{port}\r\nConnection: keep-alive\r\n\r\n";
+                        byte[] requestBytes = Encoding.ASCII.GetBytes(request);
+                        networkStream.Write(requestBytes, 0, requestBytes.Length);
+                        Debug.Log($"MJPEGStreamRenderer: Подключено к {host}:{port}");
+
+                        ReadFrames(networkStream);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                if (isRunning)
+                    Debug.LogWarning($"MJPEGStreamRenderer: {ex.GetBaseException().Message}. Переподключение через 2 сек...");
+            }
+            finally
+            {
+                activeClient = null;
+            }
+
+            if (isRunning)
+                Thread.Sleep(2000);
+        }
+    }
+
+    /// <summary>
+    /// Читает поток и вырезает из него JPEG-кадры по маркерам FF D8 ... FF D9.
+    /// HTTP- и multipart-заголовки — это ASCII-текст без байта 0xFF, поэтому их отдельно пропускать не нужно.
+    /// </summary>
+    private void ReadFrames(NetworkStream stream)
+    {
+        byte[] buf = new byte[InitialBufferSize];
+        int len = 0;          // сколько байт в буфере
+        int scan = 0;         // откуда продолжать поиск, чтобы не просматривать данные повторно
+        int frameStart = -1;  // начало текущего кадра, если FF D8 уже найден
+
+        while (isRunning)
+        {
+            // Буфер растёт под большой кадр (высокое разрешение камеры легко даёт > 64 КБ)
+            if (buf.Length - len < MinFreeSpace)
+            {
+                if (buf.Length >= MaxBufferSize)
+                {
+                    Debug.LogWarning("MJPEGStreamRenderer: Буфер переполнен, сброс.");
+                    len = 0; scan = 0; frameStart = -1;
+                }
+                else
+                {
+                    Array.Resize(ref buf, buf.Length * 2);
+                }
+            }
+
+            // Блокирующее чтение вместо опроса DataAvailable + Sleep(1): меньше задержка и нагрузка на CPU
+            int bytesRead = stream.Read(buf, len, buf.Length - len);
+            if (bytesRead <= 0) return; // соединение закрыто
+            len += bytesRead;
+
+            while (true)
+            {
+                if (frameStart < 0)
+                {
+                    frameStart = FindMarker(buf, scan, len, 0xD8);
+                    if (frameStart < 0) { scan = Math.Max(0, len - 1); break; }
+                    scan = frameStart + 2;
+                }
+
+                int end = FindMarker(buf, scan, len, 0xD9);
+                if (end < 0) { scan = Math.Max(frameStart + 2, len - 1); break; }
+                end += 2;
+
+                byte[] jpeg = new byte[end - frameStart];
+                Buffer.BlockCopy(buf, frameStart, jpeg, 0, jpeg.Length);
+
+                // Кладём только самый свежий кадр; если Update не успел забрать предыдущий — он просто заменяется.
+                Interlocked.Exchange(ref pendingJpeg, jpeg);
+
+                frameStart = -1;
+                scan = end;
+            }
+
+            // Сдвигаем буфер: выбрасываем всё, что уже обработано
+            int keepFrom = frameStart >= 0 ? frameStart : scan;
+            if (keepFrom > 0)
+            {
+                Buffer.BlockCopy(buf, keepFrom, buf, 0, len - keepFrom);
+                len -= keepFrom;
+                scan -= keepFrom;
+                if (frameStart >= 0) frameStart = 0;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Ищет пару байт 0xFF, second в диапазоне [from, to).
+    /// </summary>
+    private static int FindMarker(byte[] data, int from, int to, byte second)
+    {
+        for (int i = from; i < to - 1; i++)
+        {
+            if (data[i] == 0xFF && data[i + 1] == second)
+                return i;
+        }
+        return -1;
+    }
+
+    void Update()
+    {
+        if (targetFPS > 0 && Time.unscaledTime < nextDecodeTime)
+            return;
+
+        byte[] jpeg = Interlocked.Exchange(ref pendingJpeg, null);
+        if (jpeg == null)
+            return;
+
+        // Текстура та же самая, LoadImage меняет её содержимое — переназначать в материал не нужно
+        if (currentTexture.LoadImage(jpeg, false))
+        {
+            lastShownJpeg = jpeg;
+            if (targetFPS > 0)
+                nextDecodeTime = Time.unscaledTime + 1f / targetFPS;
+        }
+    }
+
+    /// <summary>
+    /// Сохраняет текущий кадр в папку photoFolderName на рабочем столе.
+    /// Сохраняются исходные байты JPEG от камеры — без перекодирования и потери качества.
+    /// </summary>
+    public void TakePhoto()
+    {
+        byte[] jpeg = lastShownJpeg;
+        if (jpeg == null)
+        {
+            Debug.LogWarning("MJPEGStreamRenderer: Нет кадра для сохранения (камера ещё не подключена?)");
+            return;
+        }
+
+        string folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), photoFolderName);
+        string file = Path.Combine(folder, $"Photo_{DateTime.Now:yyyy-MM-dd_HH-mm-ss-fff}.jpg");
+
+        // Запись на диск в фоне, чтобы в VR не было подёргивания кадра
+        Task.Run(() =>
+        {
+            try
+            {
+                Directory.CreateDirectory(folder);
+                File.WriteAllBytes(file, jpeg);
+                Debug.Log($"MJPEGStreamRenderer: Фото сохранено: {file}");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"MJPEGStreamRenderer: Не удалось сохранить фото: {ex.Message}");
+            }
+        });
+    }
+
+    void OnDestroy()
+    {
+        isRunning = false;
+        activeClient?.Close(); // прерывает зависший Read, чтобы поток завершился сразу
+        if (streamThread != null && streamThread.IsAlive)
+            streamThread.Join(1000);
+
+        if (currentTexture != null)
+            Destroy(currentTexture);
+        if (material != null)
+            Destroy(material);
     }
 
     void OnApplicationQuit()

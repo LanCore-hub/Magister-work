@@ -370,7 +370,8 @@ namespace Whisper.Samples
             if (command.Contains("вперед") || command.Contains("вперёд.") ||
                 command.Contains("вверх") || command.Contains("вверх.") ||
                 command.Contains("верх") || command.Contains("верх.") ||
-                command.Contains("прямо") || command.Contains("прямо."))
+                command.Contains("прямо") || command.Contains("прямо.") ||
+                command.Contains("сверху") || command.Contains("сверху."))
             {
                 Debug.Log("Executing: Move Forward");
                 if (Stop_sign != null) Stop_sign.SetActive(false);
@@ -382,7 +383,8 @@ namespace Whisper.Samples
                 SendCommandToESP8266("/forward");
             }
             else if (command.Contains("назад") || command.Contains("назад.") ||
-                     command.Contains("вниз") || command.Contains("вниз."))
+                     command.Contains("вниз") || command.Contains("вниз.") ||
+                     command.Contains("внизу") || command.Contains("внизу."))
             {
                 Debug.Log("Executing: Move Backward");
                 if (Stop_sign != null) Stop_sign.SetActive(false);
@@ -394,7 +396,8 @@ namespace Whisper.Samples
                 SendCommandToESP8266("/backward");
             }
             else if (command.Contains("влево") || command.Contains("влево.") ||
-                     command.Contains("лево") || command.Contains("лево."))
+                     command.Contains("лево") || command.Contains("лево.") ||
+                     command.Contains("слева") || command.Contains("слева."))
             {
                 Debug.Log("Executing: Turn Left");
                 if (Stop_sign != null) Stop_sign.SetActive(false);
@@ -406,7 +409,8 @@ namespace Whisper.Samples
                 SendCommandToESP8266("/left");
             }
             else if (command.Contains("вправо") || command.Contains("вправо.") ||
-                     command.Contains("право") || command.Contains("право."))
+                     command.Contains("право") || command.Contains("право.") ||
+                     command.Contains("справа") || command.Contains("справа."))
             {
                 Debug.Log("Executing: Turn Right");
                 if (Stop_sign != null) Stop_sign.SetActive(false);
